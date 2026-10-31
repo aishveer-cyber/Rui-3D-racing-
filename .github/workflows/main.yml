@@ -1,3 +1,4 @@
+
 name: Build Rui 3D Racing APK and AAB
 
 on:
@@ -13,3 +14,129 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          log-accepted-android-sdk-licenses: false
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+
+      - name: Find Game Project
+        id: project
+        shell: bash
+        run: |
+          WRAPPER=$(find . -type f -name gradlew -not -path './.git/*' -print -quit)
+          if [ -z "$WRAPPER" ]; then
+            echo "ERROR: gradlew not found"
+            exit 1
+          fi
+
+          DIR=$(dirname "$WRAPPER")
+          echo "dir=$DIR" >> "$GITHUB_OUTPUT"
+
+          PROPERTIES="$DIR/gradle/wrapper/gradle-wrapper.properties"
+          VERSION="8.9"
+
+          if [ -f "$PROPERTIES" ]; then
+            FOUND=$(grep -oE 'gradle-[0-9]+\.[0-9]+(\.[0-9]+)?(-[a-zA-Z0-9.-]+)?-(bin|all)\.zip' "$PROPERTIES" | head -1 | sed -E 's/^gradle-//; s/-(bin|all)\.zip$//')
+            if [ -n "$FOUND" ]; then VERSION="$FOUND"; fi
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Project: $DIR"
+          echo "Gradle version: $VERSION"
+
+      - name: Install Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: ${{ steps.project.outputs.version }}
+
+      - name: Fix Duplicate Android Resource
+        working-directory: ${{ steps.project.outputs.dir }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          file = Path("app/src/main/res/values/colors.xml")
+          if file.exists():
+              source = file.read_text()
+              source = re.sub(
+                  r'<color\s+name="ic_launcher_background"\s*>.*?</color>',
+                  '',
+                  source,
+                  flags=re.DOTALL
+              )
+              file.write_text(source)
+              print("Checked duplicate launcher background resource.")
+          PY
+
+      - name: Fix C++ Compilation Errors
+        working-directory: ${{ steps.project.outputs.dir }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          engine = Path("engine/core/Engine.cpp")
+          if engine.exists():
+              source = engine.read_text()
+              source, count = re.subn(
+                  r'carModel\.setScale\(\s*1\.0f\s*,\s*0\.5f\s*,\s*2\.0f\s*\)',
+                  'carModel.setScale(Vector3(1.0f, 0.5f, 2.0f))',
+                  source
+              )
+              engine.write_text(source)
+              print("Fixed setScale calls:", count)
+
+          header = Path("engine/graphics/Shader.h")
+          cpp = Path("engine/graphics/Shader.cpp")
+          names = r'(?:setInt|setFloat|setVec2|setVec3|setVec4|setMat4)'
+
+          if not header.exists() or not cpp.exists():
+              raise SystemExit("Shader source files not found.")
+
+          h = header.read_text()
+          h, hc = re.subn(
+              rf'(\bvoid\s+{names}\s*\([^;{{}}]*\))\s*(?=;)',
+              r'\1 const ',
+              h
+          )
+          header.write_text(h)
+
+          c = cpp.read_text()
+          c, cc = re.subn(
+              rf'(\bvoid\s+Shader::{names}\s*\([^{{}}]*\))\s*(?=\{{)',
+              r'\1 const ',
+              c
+          )
+          cpp.write_text(c)
+
+          print("Updated Shader.h declarations:", hc)
+          print("Updated Shader.cpp definitions:", cc)
+
+          if hc == 0 or cc == 0:
+              raise SystemExit("Could not locate shader setter declarations or definitions.")
+          PY
+
+      - name: Build APK and AAB
+        working-directory: ${{ steps.project.outputs.dir }}
+        run: gradle assembleDebug bundleRelease --stacktrace
+
+      - name: Upload APK and AAB
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Rui-3D-Racing-builds
+          path: |
+            **/build/outputs/apk/**/*.apk
+            **/build/outputs/bundle/**/*.aab
+          if-no-files-found: warn

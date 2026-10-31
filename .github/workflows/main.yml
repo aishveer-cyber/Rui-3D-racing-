@@ -1,0 +1,37 @@
+
+name: Build Rui 3D Racing APK and AAB
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Build APK and AAB
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug bundleRelease
+
+      - name: Upload builds
+        uses: actions/upload-artifact@v4
+        with:
+          name: Rui-3D-Racing-builds
+          path: |
+            **/build/outputs/apk/**/*.apk
+            **/build/outputs/bundle/**/*.aab

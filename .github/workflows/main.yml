@@ -14,24 +14,32 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Java
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
+      - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+
+      - name: Accept Android Licenses
+        run: yes | sdkmanager --licenses
+
+      - name: Install Android Build Tools
+        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
       - name: Build APK and AAB
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug bundleRelease
+          ./gradlew assembleDebug bundleRelease --stacktrace
 
-      - name: Upload builds
+      - name: Upload APK and AAB
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: Rui-3D-Racing-builds
           path: |
             **/build/outputs/apk/**/*.apk
             **/build/outputs/bundle/**/*.aab
+          if-no-files-found: warn

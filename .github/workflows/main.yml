@@ -27,8 +27,22 @@ jobs:
           log-accepted-android-sdk-licenses: false
           packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
 
-      - name: Build APK and AAB
+      - name: Find and Build Game
+        shell: bash
         run: |
+          GRADLEW=$(find . -type f -name gradlew -not -path './.git/*' -print -quit)
+
+          if [ -z "$GRADLEW" ]; then
+            echo "ERROR: No Gradle wrapper (gradlew) found!"
+            echo "Project files:"
+            find . -maxdepth 4 -type f | head -100
+            exit 1
+          fi
+
+          PROJECT_DIR=$(dirname "$GRADLEW")
+          echo "Found game project in: $PROJECT_DIR"
+
+          cd "$PROJECT_DIR"
           chmod +x gradlew
           ./gradlew assembleDebug bundleRelease --stacktrace
 

@@ -4,7 +4,8 @@ name: Build Rui 3D Racing APK and AAB
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches:
+      - main
 
 jobs:
   build:
@@ -24,10 +25,12 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Accept Android Licenses
-        run: yes | sdkmanager --licenses
+        run: |
+          yes | sdkmanager --licenses
 
-      - name: Install Android Build Tools
-        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
       - name: Build APK and AAB
         run: |

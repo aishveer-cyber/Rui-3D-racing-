@@ -1,48 +1,15 @@
+name: Build Rui 3D Racing APK and AAB
 
-      - name: Fix C++ Compilation Errors
-        working-directory: ${{ steps.project.outputs.dir }}
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
 
-          # Fix the three-component scale call.
-          engine = Path("engine/core/Engine.cpp")
-          source = engine.read_text()
-          source, count = re.subn(
-              r'carModel\.setScale\(\s*1\.0f\s*,\s*0\.5f\s*,\s*2\.0f\s*\)',
-              'carModel.setScale(Vector3(1.0f, 0.5f, 2.0f))',
-              source
-          )
-          engine.write_text(source)
-          print("Fixed setScale calls:", count)
+jobs:
+  build:
+    runs-on: ubuntu-latest
 
-          # Make shader uniform setters callable on const Shader objects.
-          header = Path("engine/graphics/Shader.h")
-          cpp = Path("engine/graphics/Shader.cpp")
-
-          names = r'(?:setInt|setFloat|setVec2|setVec3|setVec4|setMat4)'
-
-          h = header.read_text()
-          h, hc = re.subn(
-              rf'(\bvoid\s+{names}\s*\([^;{{}}]*\))\s*(?=;)',
-              r'\1 const ',
-              h
-          )
-          header.write_text(h)
-
-          c = cpp.read_text()
-          c, cc = re.subn(
-              rf'(\bvoid\s+Shader::{names}\s*\([^{{}}]*\))\s*(?=\{{)',
-              r'\1 const ',
-              c
-          )
-          cpp.write_text(c)
-
-          print("Updated Shader.h declarations:", hc)
-          print("Updated Shader.cpp definitions:", cc)
-
-          if hc == 0 or cc == 0:
-              raise SystemExit("Could not locate shader setter declarations or definitions.")
-          PY
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4

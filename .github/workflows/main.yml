@@ -27,24 +27,42 @@ jobs:
           log-accepted-android-sdk-licenses: false
           packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
 
-      - name: Find and Build Game
+      - name: Find Gradle project
+        id: project
         shell: bash
         run: |
-          GRADLEW=$(find . -type f -name gradlew -not -path './.git/*' -print -quit)
+          WRAPPER=$(find . -type f -name gradlew -not -path './.git/*' -print -quit)
 
-          if [ -z "$GRADLEW" ]; then
-            echo "ERROR: No Gradle wrapper (gradlew) found!"
-            echo "Project files:"
-            find . -maxdepth 4 -type f | head -100
+          if [ -z "$WRAPPER" ]; then
+            echo "ERROR: gradlew not found"
             exit 1
           fi
 
-          PROJECT_DIR=$(dirname "$GRADLEW")
-          echo "Found game project in: $PROJECT_DIR"
+          DIR=$(dirname "$WRAPPER")
+          echo "dir=$DIR" >> "$GITHUB_OUTPUT"
 
-          cd "$PROJECT_DIR"
-          chmod +x gradlew
-          ./gradlew assembleDebug bundleRelease --stacktrace
+          PROPERTIES="$DIR/gradle/wrapper/gradle-wrapper.properties"
+
+          if [ -f "$PROPERTIES" ]; then
+            VERSION=$(grep -oE 'gradle-[0-9]+\.[0-9]+(\.[0-9]+)?(-[a-zA-Z0-9.-]+)?-(bin|all)\.zip' "$PROPERTIES" | head -1 | sed -E 's/^gradle-//; s/-(bin|all)\.zip$//')
+          fi
+
+          if [ -z "$VERSION" ]; then
+            VERSION="8.9"
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Gradle version: $VERSION"
+
+      - name: Install Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: ${{ steps.project.outputs.version }}
+
+      - name: Build APK and AAB
+        working-directory: ${{ steps.project.outputs.dir }}
+        run: |
+          gradle assembleDebug bundleRelease --stacktrace
 
       - name: Upload APK and AAB
         if: always()

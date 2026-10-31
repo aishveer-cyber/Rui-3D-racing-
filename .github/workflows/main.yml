@@ -42,6 +42,7 @@ jobs:
           echo "dir=$DIR" >> "$GITHUB_OUTPUT"
 
           PROPERTIES="$DIR/gradle/wrapper/gradle-wrapper.properties"
+          VERSION=""
 
           if [ -f "$PROPERTIES" ]; then
             VERSION=$(grep -oE 'gradle-[0-9]+\.[0-9]+(\.[0-9]+)?(-[a-zA-Z0-9.-]+)?-(bin|all)\.zip' "$PROPERTIES" | head -1 | sed -E 's/^gradle-//; s/-(bin|all)\.zip$//')
@@ -52,12 +53,40 @@ jobs:
           fi
 
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Gradle version: $VERSION"
 
       - name: Install Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: ${{ steps.project.outputs.version }}
+
+      - name: Fix Duplicate Launcher Resource
+        working-directory: ${{ steps.project.outputs.dir }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          file = Path("app/src/main/res/values/colors.xml")
+
+          if not file.exists():
+              raise SystemExit("colors.xml not found")
+
+          tree = ET.parse(file)
+          root = tree.getroot()
+
+          removed = 0
+          for item in list(root):
+              if item.tag == "color" and item.get("name") == "ic_launcher_background":
+                  root.remove(item)
+                  removed += 1
+
+          if removed:
+              tree.write(file, encoding="utf-8", xml_declaration=True)
+              print("Removed duplicate launcher background resource.")
+          else:
+              print("No duplicate found in colors.xml; leaving it unchanged.")
+          PY
 
       - name: Build APK and AAB
         working-directory: ${{ steps.project.outputs.dir }}
